@@ -12,7 +12,7 @@ from models.lstm_model import *
 # Paths
 base_directory = os.path.dirname(__file__)
 eval_directory = os.path.join(base_directory, 'evaluations')
-data_directory = os.path.join(base_directory, "datasets")
+data_directory = os.path.join(base_directory, "datasets_divided", "first")
 
 if os.path.exists(eval_directory):
     shutil.rmtree(eval_directory)
