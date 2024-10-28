@@ -14,24 +14,24 @@ base_directory = os.path.dirname(__file__)
 eval_directory = os.path.join(base_directory, 'evaluations')
 data_directory = os.path.join(base_directory, "datasets_divided", "first")
 
-if os.path.exists(eval_directory):
-    shutil.rmtree(eval_directory)
-    print("folder deleted")
+# if os.path.exists(eval_directory):
+#     shutil.rmtree(eval_directory)
+#     print("folder deleted")
 
-os.makedirs(eval_directory)
-csv_files = [
-    ("mae.csv", ["fname", "ARIMA", "SARIMA", "RNN", "LSTM"]),
-    ("mape.csv", ["fname", "ARIMA", "SARIMA", "RNN", "LSTM"]), 
-    ("mse.csv", ["fname", "ARIMA", "SARIMA", "RNN", "LSTM"]), 
-    ("rmse.csv", ["fname", "ARIMA", "SARIMA", "RNN", "LSTM"]),  
-]
+# os.makedirs(eval_directory)
+# csv_files = [
+#     ("mae.csv", ["fname", "ARIMA", "SARIMA", "RNN", "LSTM"]),
+#     ("mape.csv", ["fname", "ARIMA", "SARIMA", "RNN", "LSTM"]), 
+#     ("mse.csv", ["fname", "ARIMA", "SARIMA", "RNN", "LSTM"]), 
+#     ("rmse.csv", ["fname", "ARIMA", "SARIMA", "RNN", "LSTM"]),  
+# ]
 
-for filename, header in csv_files:
-    filepath = os.path.join(eval_directory, filename)
-    with open(filepath, mode="w", newline="") as file:
-        writer = csv.writer(file)
-        writer.writerow(header)
-        print(f"{filename} created")
+# for filename, header in csv_files:
+#     filepath = os.path.join(eval_directory, filename)
+#     with open(filepath, mode="w", newline="") as file:
+#         writer = csv.writer(file)
+#         writer.writerow(header)
+#         print(f"{filename} created")
 
 # Grid search parameters
 arima_params = {'p_values': range(3), 'd_values': [0, 1], 'q_values': range(3)}
@@ -46,115 +46,114 @@ csv_mse = os.path.join(eval_directory, 'mse.csv')
 csv_rmse = os.path.join(eval_directory,  'rmse.csv')
 
 
+df_finished_file = pd.read_csv("/workspaces/benchmark_ts_model_test/univariate/evaluations/mae.csv")
+list_finished_file = df_finished_file["fname"].to_list()
+
 for filename in os.listdir(data_directory):
-    filepath = os.path.join(data_directory, filename)
-    print("file -------------", filename)
+    if filename not in list_finished_file:
+        filepath = os.path.join(data_directory, filename)
+        print("file -------------", filename)
 
-    df = pd.read_csv(filepath, index_col = 0, parse_dates=True)
-    # Step 1: Find the first occurrence of NaN in any column
-    first_nan_index = df[df.isna().any(axis=1)].index.min()
+        df = pd.read_csv(filepath, index_col = 0, parse_dates=True)
+        # Step 1: Find the first occurrence of NaN in any column
+        first_nan_index = df[df.isna().any(axis=1)].index.min()
 
-    # Step 2: Slice the DataFrame to remove all rows starting from the first NaN
-    if pd.notna(first_nan_index):
-        df = df.loc[:first_nan_index].iloc[:-1]  # Retain rows before the first NaN row
+        # Step 2: Slice the DataFrame to remove all rows starting from the first NaN
+        if pd.notna(first_nan_index):
+            df = df.loc[:first_nan_index].iloc[:-1]  # Retain rows before the first NaN row
 
-    
+        
 
-    df_index_removed = pd.read_csv(filepath, usecols=[1])
-    # Step 1: Find the first occurrence of NaN in any column
-    first_nan_index = df_index_removed[df_index_removed.isna().any(axis=1)].index.min()
+        df_index_removed = pd.read_csv(filepath, usecols=[1])
+        # Step 1: Find the first occurrence of NaN in any column
+        first_nan_index = df_index_removed[df_index_removed.isna().any(axis=1)].index.min()
 
-    # Step 2: Slice the DataFrame to remove all rows starting from the first NaN
-    if pd.notna(first_nan_index):
-        df_index_removed = df_index_removed.loc[:first_nan_index].iloc[:-1]  # Retain rows before the first NaN row
+        # Step 2: Slice the DataFrame to remove all rows starting from the first NaN
+        if pd.notna(first_nan_index):
+            df_index_removed = df_index_removed.loc[:first_nan_index].iloc[:-1]  # Retain rows before the first NaN row
 
-    
+        try:
+            #arima
+            best_cfg_arima, _ = random_search_arima(data = df_index_removed, **arima_params)
+            if best_cfg_arima is None: 
+                best_cfg_arima = (1, 0, 1)
+            print(f"best arima config: {best_cfg_arima}")
+            results_arima = evaluate_arima(data = df_index_removed, best_cfg=best_cfg_arima)
+            print(results_arima)
 
+            #sarima
+            best_cfg_sarima, _ = random_search_sarima(data = df, **sarima_params)
+            if best_cfg_sarima is None:
+                best_cfg_sarima = (1, 1, 1, 1, 1, 1, 12)
+            results_sarima = evaluate_sarima(data = df, best_cfg=best_cfg_sarima)
 
-    try:
-        #arima
-        best_cfg_arima, _ = random_search_arima(data = df_index_removed, **arima_params)
-        if best_cfg_arima is None: 
-            best_cfg_arima = (1, 0, 1)
-        print(f"best arima config: {best_cfg_arima}")
-        results_arima = evaluate_arima(data = df_index_removed, best_cfg=best_cfg_arima)
-        print(results_arima)
+            #rnn
+            results_rnn = random_search_rnn(df = df_index_removed, **rnn_params)
 
-        #sarima
-        best_cfg_sarima, _ = random_search_sarima(data = df, **sarima_params)
-        if best_cfg_sarima is None:
-            best_cfg_sarima = (1, 1, 1, 1, 1, 1, 12)
-        results_sarima = evaluate_sarima(data = df, best_cfg=best_cfg_sarima)
+            #lstm
+            results_lstm = perform_random_search_lstm(df = df_index_removed, **lstm_params)
 
-        #rnn
-        results_rnn = random_search_rnn(df = df_index_removed, **rnn_params)
-
-        #lstm
-        results_lstm = perform_random_search_lstm(df = df_index_removed, **lstm_params)
-
-        new_row_mae = pd.DataFrame(
-            [
+            new_row_mae = pd.DataFrame(
                 [
-                    filename,
-                    results_arima["mae"],
-                    results_sarima["mae"],
-                    results_rnn["mae"],
-                    results_lstm["mae"],
-                ]
-            ],
-            columns=["fname", "ARIMA", "SARIMA", "RNN", "LSTM"],
-        )
-        new_row_mape = pd.DataFrame(
-            [
+                    [
+                        filename,
+                        results_arima["mae"],
+                        results_sarima["mae"],
+                        results_rnn["mae"],
+                        results_lstm["mae"],
+                    ]
+                ],
+                columns=["fname", "ARIMA", "SARIMA", "RNN", "LSTM"],
+            )
+            new_row_mape = pd.DataFrame(
                 [
-                    filename,
-                    results_arima["mape"],
-                    results_sarima["mape"],
-                    results_rnn["mape"],
-                    results_lstm["mape"],
-                ]
-            ],
-            columns=["fname", "ARIMA", "SARIMA", "RNN", "LSTM"],
-        )
-        new_row_mse = pd.DataFrame(
-            [
+                    [
+                        filename,
+                        results_arima["mape"],
+                        results_sarima["mape"],
+                        results_rnn["mape"],
+                        results_lstm["mape"],
+                    ]
+                ],
+                columns=["fname", "ARIMA", "SARIMA", "RNN", "LSTM"],
+            )
+            new_row_mse = pd.DataFrame(
                 [
-                    filename,
-                    results_arima["mse"],
-                    results_sarima["mse"],
-                    results_rnn["mse"],
-                    results_lstm["mse"],
-                ]
-            ],
-            columns=["fname", "ARIMA", "SARIMA", "RNN", "LSTM"],
-        )
-        new_row_rmse = pd.DataFrame(
-            [
+                    [
+                        filename,
+                        results_arima["mse"],
+                        results_sarima["mse"],
+                        results_rnn["mse"],
+                        results_lstm["mse"],
+                    ]
+                ],
+                columns=["fname", "ARIMA", "SARIMA", "RNN", "LSTM"],
+            )
+            new_row_rmse = pd.DataFrame(
                 [
-                    filename,
-                    results_arima["mae"],
-                    results_sarima["mae"],
-                    results_rnn["mae"],
-                    results_lstm["mae"],
-                ]
-            ],
-            columns=["fname", "ARIMA", "SARIMA", "RNN", "LSTM"],
-        )
+                    [
+                        filename,
+                        results_arima["mae"],
+                        results_sarima["mae"],
+                        results_rnn["mae"],
+                        results_lstm["mae"],
+                    ]
+                ],
+                columns=["fname", "ARIMA", "SARIMA", "RNN", "LSTM"],
+            )
 
-        new_row_mae.to_csv(
-            csv_mae, mode="a", header=False, index=False, lineterminator="\n"
-        )
-        new_row_mape.to_csv(
-            csv_mape, mode="a", header=False, index=False, lineterminator="\n"
-        )
-        new_row_mse.to_csv(
-            csv_mse, mode="a", header=False, index=False, lineterminator="\n"
-        )
-        new_row_rmse.to_csv(
-            csv_rmse, mode="a", header=False, index=False, lineterminator="\n"
-        )
-    except Exception as e:
-        print(f"exception: {e}")
-        continue
-
-
+            new_row_mae.to_csv(
+                csv_mae, mode="a", header=False, index=False, lineterminator="\n"
+            )
+            new_row_mape.to_csv(
+                csv_mape, mode="a", header=False, index=False, lineterminator="\n"
+            )
+            new_row_mse.to_csv(
+                csv_mse, mode="a", header=False, index=False, lineterminator="\n"
+            )
+            new_row_rmse.to_csv(
+                csv_rmse, mode="a", header=False, index=False, lineterminator="\n"
+            )
+        except Exception as e:
+            print(f"exception: {e}")
+            continue
